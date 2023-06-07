@@ -3,6 +3,7 @@ import x_xy
 from x_xy import algorithms, render, utils
 import time
 
+
 def main(do_render: bool = False):
     """Tested on x_xy_v2 == 0.2.2"""
     # disable warnings
@@ -26,7 +27,6 @@ def main(do_render: bool = False):
         render.animate("rcmg_double_pendulum", scene, x, 0.01, fmt="mp4")
 
     # Let's try some timings
-
     def time_me(f, n=5):
         # don't count time for jitting
         f()
@@ -44,6 +44,7 @@ def main(do_render: bool = False):
     # ~10ms
     # crazy fast even on CPU
     time_me(lambda: jax.jit(generator)(seed))
-    
+
+
 if __name__ == "__main__":
     main(True)
