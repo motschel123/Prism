@@ -1,0 +1,2 @@
+neural-networks @ git+https://github.com/SimiPixel/neural_networks.git
+x-xy @ git+https://github.com/SimiPixel/x_xy_v2.git
