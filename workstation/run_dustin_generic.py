@@ -5,6 +5,7 @@ from x_xy import maths, base
 from random_angle import random_angles_with_rigid_phases_over_time
 from dataclasses import dataclass
 from neural_networks.logging import NeptuneLogger
+from neural_networks.rnno import SaveParamsTrainingLoopCallback
 from neural_networks.rnno import dustin_exp_xml, rnno_v2, train
 from sys import argv
 
@@ -160,14 +161,15 @@ def finalize_fn(key, q, x, sys):
 
 
 def usage(): 
-    print(f"Usage: python {argv[0]} <rigid|normal> <n_rigid_phases> <rigid_durarion_cov> <transition_cov>")
+    print(f"""Usage: python {argv[0]} <rigid> <n_rigid_phases> <rigid_durarion_cov> <transition_cov> <name>
+          \tpython {argv[0]} <normal> <name>""")
     exit()
 
 
 def main():
     # Check arguments
-    if len(argv != 2):
-        if len(argv) != 5:
+    if len(argv) != 3:
+        if len(argv) != 6:
             usage()
         if argv[1] != "rigid":
             usage()
@@ -183,10 +185,12 @@ def main():
         config = ExtendedConfig(
         n_rigid_phases=n_rigid_phases, cov_rigid_durations=cov_rigid_durations, cov_transitions=cov_transitions
         )
-        name = f"Phases={n_rigid_phases}, DurationCov={cov_rigid_durations}"
+        name = argv[5]
     else:
+        if (argv[1] != "normal"):
+            usage()
         config = x_xy. x_xy.algorithms.RCMG_Config()
-        name = "normal"
+        name = argv[2]
     
     # Set up system
     define_joints()
@@ -205,7 +209,8 @@ def main():
     
     # Start training
     print(f"Starting run with config:\n{config}\n")
-    train(gen, 1500, rnno, loggers=[NeptuneLogger(name=name)])
+    
+    train(gen, 1500, rnno, loggers=[NeptuneLogger(name=name)], callbacks=[save_params])
 
 
 
