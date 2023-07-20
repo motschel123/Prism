@@ -189,7 +189,7 @@ def main():
     else:
         if (argv[1] != "normal"):
             usage()
-        config = x_xy. x_xy.algorithms.RCMG_Config()
+        config = x_xy.algorithms.RCMG_Config()
         name = argv[2]
     
     # Set up system
@@ -206,7 +206,7 @@ def main():
     gen = x_xy.algorithms.batch_generator(gen, 80)
 
     rnno = rnno_v2(x_xy.io.load_sys_from_str(dustin_exp_xml))
-    
+    save_params = SaveParamsTrainingLoopCallback(f"/data/"<idm>"/prism_params/{name}")
     # Start training
     print(f"Starting run with config:\n{config}\n")
     
