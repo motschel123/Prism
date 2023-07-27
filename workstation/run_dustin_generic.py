@@ -8,6 +8,7 @@ from neural_networks.logging import NeptuneLogger
 from neural_networks.rnno import SaveParamsTrainingLoopCallback
 from neural_networks.rnno import dustin_exp_xml, rnno_v2, train
 from sys import argv
+import os
 
 three_seg_rigid = r"""
 <x_xy model="three_seg_rigid">
@@ -168,6 +169,10 @@ def usage():
 
 def main():
     # Check arguments
+    user = os.environ["USER"]
+    if user is None:
+        print("USER environment variable not set!")
+        exit()
     if len(argv) != 3:
         if len(argv) != 6:
             usage()
@@ -206,7 +211,7 @@ def main():
     gen = x_xy.algorithms.batch_generator(gen, 80)
 
     rnno = rnno_v2(x_xy.io.load_sys_from_str(dustin_exp_xml))
-    save_params = SaveParamsTrainingLoopCallback(f"/data/"<idm>"/prism_params/{name}")
+    save_params = SaveParamsTrainingLoopCallback(f"/data/{user}/prism_params/{name}")
     # Start training
     print(f"Starting run with config:\n{config}\n")
     
