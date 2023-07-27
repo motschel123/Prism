@@ -1,6 +1,5 @@
 export NEPTUNE_TOKEN=
 export NEPTUNE_PROJECT=
-conda activate prism
 
 # Arguments for runs
 # Usage: rigid <n rigid phases> <rigid cov> <transition cov> <name>
@@ -10,9 +9,7 @@ PARAMS=("normal no_rigid_phases" "rigid 30 0.001 0.0001 many_tiny_stops" "rigid 
 # Make sure neptune data is stored locally and not in the RRZE network 
 mkdir -p /data/$USER/neptune
 mkdir -p /data/$USER/prism_log
-ln -s /data/$USER/neptune .neptune
-
-echo PRISM > $FILE
+ln -s -T /data/$USER/neptune .neptune >> /dev/null 2>&1
 
 for i in "${PARAMS[@]}"
 do
@@ -22,7 +19,7 @@ do
     echo Log is stored in $OUTPUT_FILE
 
     # Start run
-    python -m workstation/run_dustin_generic.py $i > $OUTPUT_FILE 2>&1
+    python workstation/run_dustin_generic.py $i > $OUTPUT_FILE 2>&1
 done
 
 echo Done!
