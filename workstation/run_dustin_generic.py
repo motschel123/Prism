@@ -91,7 +91,7 @@ def _draw_sometimes_rigid(
         dang_max=config.dang_max,
         t_min=config.t_min,
         t_max=config.t_max,
-        randomized_interpolation=config.randomized_interpolation,
+        randomized_interpolation=config.randomized_interpolation_angle,
         range_of_motion=config.range_of_motion_hinge,
         range_of_motion_method=config.range_of_motion_hinge_method
     )
@@ -215,7 +215,7 @@ def main():
     # Start training
     print(f"Starting run with config:\n{config}\n")
     
-    train(gen, 1500, rnno, loggers=[NeptuneLogger(name=name)], callbacks=[save_params])
+    train(gen, 1500, rnno, loggers=[NeptuneLogger(name=name)], callbacks=[save_params], key_generator=jax.random.PRNGKey(1), key_network=jax.random.PRNGKey(1))
 
 
 
