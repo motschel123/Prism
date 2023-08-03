@@ -2,3 +2,5 @@
 .vscode
 .neptune
 setup_neptune
+
+__pycache__/
