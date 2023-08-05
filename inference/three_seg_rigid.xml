@@ -1,0 +1,23 @@
+<x_xy model="three_seg_rigid">
+    <options gravity="0 0 9.81" dt="0.01"/>
+    <worldbody>
+        <body name="seg2" joint="free">
+            <geom type="box" mass="10" pos="0.1 0 0" dim="0.2 0.05 0.05" vispy_color="red"/>
+            <body name="seg1" joint="rsry" pos="0 0 0">
+                <geom type="box" mass="10" pos="-0.1 0 0" dim="-0.2 0.05 0.05" vispy_color="yellow"/>
+                <body name="imu1" pos="-0.1 0.0 0.03" joint="frozen">
+                    <geom type="box" mass="2" pos="0 0 0" dim="0.05 0.01 0.01" vispy_color="lightgreen"/>
+                </body>
+            </body>
+            <body name="seg3" joint="rsrz" pos="0.2 0 0">
+                <geom type="box" mass="10" pos="0.1 0 0" dim="0.2 0.05 0.05" vispy_color="blue"/>
+                <body name="imu2" joint="frozen" pos="0.1 0.0 0.03">
+                    <geom type="box" mass="2" pos="0 0 0" dim="0.05 0.01 0.01" vispy_color="lightgreen"/>
+                </body>
+            </body>
+        </body>
+    </worldbody>
+    <defaults>
+        <geom vispy_edge_color="black" vispy_color="1 0.8 0.7 1"/>
+    </defaults>
+</x_xy>
