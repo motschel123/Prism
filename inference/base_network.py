@@ -261,11 +261,15 @@ def finalize_fn(key, q, x, sys):
     y = finalize_fn_rel_pose_data(key, q, x, sys)
     return X, y, x
 
+"""import tree_utils
+    tree_utils.tree_indices()
+"""
+from neural_networks.rnno.training_loop_callbacks import dustin_exp_Xy
 
-def generate_data(sys, config : ExtendedConfig):
+def generate_data(sys, config : ExtendedConfig, batch_size = 1):
     generator = x_xy.algorithms.build_generator(sys, config, finalize_fn=finalize_fn)
     # we can even batch together multiple generators
-    # generator = algorithms.batch_generator([generator, generator], [32, 16])
+    generator = x_xy.algorithms.batch_generator([generator], batch_size)
     seed = jax.random.PRNGKey(1,)
     X, y, xs = generator(seed)
     return X, y, xs

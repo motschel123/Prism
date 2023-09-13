@@ -1,15 +1,21 @@
 import base_network
 
-import jax.random as random
 import jax.numpy as jnp
+import jax.tree_util as jtu
 
 import numpy as np
+
+import pickle
+
+import tree_utils
 
 import x_xy
 from x_xy.subpkgs import pipeline
 from neural_networks.rnno import rnno_v2
 
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
+from matplotlib.transforms import blended_transform_factory
 
 from dataclasses import dataclass
 from math import ceil
@@ -79,14 +85,15 @@ def infer(params, X, y, xs, generate_mp4 = False, name = None):
         plot=False,
         render=generate_mp4,
         render_prediction=generate_mp4,
-        render_path=f"{output_path}/{name}_prediction.mp4"
+        render_path=f"{output_path}/{name}_prediction.mp4",
+        verbose=False
     )
     
     if (generate_mp4):
         # Render actual data
         x_xy.render.animate(
             path=f"{output_path}/{name}_actual.mp4",
-            sys=dustin_sys,
+            sys=sys,
             x=xs,
             fps=25,
             show_pbar=True,
@@ -104,13 +111,14 @@ Where y is the sequence of actual angles, whereas yhat is the prediction.
 
 data_key will be the title of the entire plot.
 """
+
+
 def create_fig_for_problems(data_key : str, data : dict):
     # Generate plot
     NCOLS = 4
     NROWS = len(data)
-    fig1, ax1 = plt.subplots(NROWS, NCOLS, figsize=(16, 4.5 * NROWS))
+    fig1, ax1 = plt.subplots(NROWS, NCOLS, figsize=(16, 3.5 * NROWS))
         
-    fig1.suptitle(data_key)
     means = {}
     
     for row, (problem_name, (y, yhat)) in enumerate(data.items()):
@@ -143,51 +151,151 @@ def create_fig_for_problems(data_key : str, data : dict):
             # Save mean
             means[problem_name][link_name] = float(jnp.average(ang_err))
 
+
     # Save plot
-    plt.savefig(f"{output_path}/{data_key}_tmp.pdf")
-    plt.close(fig1)
+    # plt.savefig(f"{output_path}/{data_key}_tmp.pdf")
+    # plt.close(fig1)
 
     # BARGRAPH
     fig2, ax2 = plt.subplots(1, 1, figsize=(16, 4.5))
-
     bar_width = 0.3
 
     for i, (topic, subtopics) in enumerate(means.items()):
         ax2.bar([p * bar_width + i for p in range(len(subtopics.values()))], subtopics.values(), width=bar_width, label=topic)
 
     ax2.set_xticks([i + j * 0.3 for i in range(len(means.keys())) for j in range(2)])
-
     ax2.set_xticklabels([item for sublist in [list(means[p].keys()) for p in means] for item in sublist])
-        # add a legend
     ax2.legend()
-    plt.savefig(f"{output_path}/{data_key}_bar.pdf")
-    plt.close(fig2)
+    # plt.savefig(f"{output_path}/{data_key}_bar.pdf")
+    #plt.close(fig2)
     
-    # Combine pdf files into one
+    filename = f"{output_path}/{data_key}.pdf"
+    fig2.suptitle(data_key)
+    with PdfPages(filename) as pdf:
+        pdf.savefig(fig2)
+        pdf.savefig(fig1)
+    
+    return means, filename
+    
+    
+def plot_results(results : dict[str, dict[str, float]]):
+    fig, axs = plt.subplots(1, 1, figsize=(16, 4))
+    bar_width = 1/(len(results) * 3)
+
+    xticks = []
+    xticklabels = []
+    
+    transform = blended_transform_factory(axs.transData, axs.transAxes)
+
+    axs.set_xticks([])
+    for i, (key, values) in enumerate(results.items()):
+        # print(range(len(values)))
+        positions_a = [j + i * bar_width * 2.5 for j in range(len(values))]
+        positions_b = [j + bar_width for j in positions_a]
+        positions = [x for pair in zip(positions_a, positions_b) for x in pair]
+        keys = [path[1].key for path, _ in jtu.tree_flatten_with_path(results[key])[0]]
+        print(key, positions)
+        rects = axs.bar(positions, jtu.tree_flatten(results[key])[0], bar_width, label=key)
+        #print(rects.get_children()[0].get_center())
+        xticks += positions
+        xticklabels += keys
+        axs.text(i + 0.25, -0.1, key, ha='center', transform=transform)
+
+    axs.set_xticks(xticks)   
+    axs.set_xticklabels(xticklabels)
+    axs.tick_params(labelsize=7, direction="out")
+    axs.legend()
+    plt.savefig(f"{output_path}/results_bar.pdf")
+    return f"{output_path}/results_bar.pdf"
+
+
+def merge_pdfs(files : list):
+    print(f"Trying to merge: {files}")
     from PyPDF2 import PdfMerger
     merger = PdfMerger()
-    merger.append(f"{output_path}/{data_key}_bar.pdf")
-    merger.append(f"{output_path}/{data_key}_tmp.pdf")
-    merger.write(f"{output_path}/{data_key}.pdf")
+    for file in files:
+        merger.append(file)
+    merger.write(f"{output_path}/results_combined.pdf")
     merger.close()
-    print(f"{output_path}/{data_key}.pdf")
+    print(f"{output_path}/results_combined.pdf")
 
+
+def get_inferred_data(n_batch):
+    cached_infered_data_path = f"{output_path}/.cache/inferred_data_batched_{n_batch}.pickle"
+    inferred_data = {}
+    if exists(cached_infered_data_path):
+        with open(cached_infered_data_path, 'rb') as file:
+            print("Using cached inferred data...")
+            return pickle.load(file)
+    
+    i, j, k = 0, 0, 0
+    maxI, maxJ, maxK = len(PROBLEMS), len(PROBLEMS), n_batch
+    for topic, _ in PROBLEMS.items():
+        i += 1
+        j, k = 0, 0
+        params = load_pickle_params(topic)
+        for problem_key, problem in PROBLEMS.items():
+            j += 1
+            k = 0
+            name = f"{topic}_{problem_key}_{n_batch}"
+            cache_file = f"{output_path}/.cache/{name}.pickle"
+            if exists(cache_file):
+                with open(cache_file, 'rb') as file:
+                    data = pickle.load(file)
+                    X, y, xs = data
+                    print("Using cached data...")
+            else:
+                X, y, xs = base_network.generate_data(sys, config_from_problem(problem), n_batch)
+                with open(cache_file, 'wb') as file:
+                    pickle.dump((X, y, xs), file)
+                
+            """
+            X: {'seg1': {
+                'acc': Array(5, 6000, 3), 
+                'gyr': Array(5, 6000, 3)
+            }}
+            """
+
+            for generatorIndex in range(n_batch):
+                k += 1
+                # Un-batch data
+                X_i = tree_utils.tree_slice(tree_utils.tree_indices(X, jnp.array([generatorIndex])),1)
+                y_i = tree_utils.tree_slice(tree_utils.tree_indices(y, jnp.array([generatorIndex])),1)
+                xs_i = tree_utils.tree_slice(tree_utils.tree_indices(xs, jnp.array([generatorIndex])),1)
+                
+                yhat_i = infer(params, X_i, y_i, xs_i, False, f"{topic}-{problem_key}")
+                
+                inferred_data[f"{topic}_{problem_key}_{generatorIndex}"] = (y_i, yhat_i)
+                
+                print(f"Finished Topic {i}/{maxI}, Problem {j}/{maxJ}, Data-row {k}/{maxK}")
+
+    # Cache inferred data
+    with open(cached_infered_data_path, 'wb') as file:
+        pickle.dump(inferred_data, file)
+     
+    return inferred_data
 
 def main():
-    params = load_pickle_params("long_rigid_phase")
-    problems_dict = {}
+    N_BATCH = 5
+    results = {}
+    filenames = []
 
-    for problem_key, problem in PROBLEMS.items():
-        X, y, xs = base_network.generate_data(sys, config_from_problem(problem))
-        yhat = infer(params, X, y, xs)
-        problems_dict[problem_key] = (y, yhat)
-    
+    inferred_data = get_inferred_data(N_BATCH)
+
     # Plot
-    create_fig_for_problems("long_rigid_phase", problems_dict)
+    for topic, _ in PROBLEMS.keys():
+        
+        pass
+        ##sub_res, filename = create_fig_for_problems(topic, problems_dict)
+    ##filenames.append(filename)
     
-    
-    
+    ##results[topic] = sub_res
+    ##print(results)
 
+    ##res_file = plot_results(results)
+    ##merge_pdfs([res_file] + filenames)
+
+    
 if __name__ == "__main__":
     # Read parameters
     if len(argv) > 2:
