@@ -118,10 +118,10 @@ data_key will be the title of the entire plot.
 """
 
 
-def create_fig_for_problems(topic : str, data : dict, n_batch: int):
+def create_fig_for_problems(topic : str, data : dict, n_batch: int, problem_keys = list(PROBLEMS.keys())):
     # Generate plot
     NCOLS = 4
-    NROWS = len(PROBLEMS)
+    NROWS = len(problem_keys)
     figs = []
         
     means = {}
@@ -137,11 +137,17 @@ def create_fig_for_problems(topic : str, data : dict, n_batch: int):
             ax.grid(True)
         figs.append(fig1)
         
-        for row, problem_name in enumerate(PROBLEMS.keys()):
+        def get_ax1(row, col):
+            if NROWS == 1:
+                return ax1[col]
+            else:
+                return ax1[row, col]
+        
+        for row, problem_name in enumerate(problem_keys):
             dict_key = f"{topic}_{problem_name}_{batch_index}"
             (y, yhat) = data[dict_key]
             
-            ax1[row, 0].text(-0.52, 0.3, problem_name.replace('_', ' '), transform=ax1[row, 0].transAxes, fontweight='bold', rotation=45)
+            get_ax1(row, 0).text(-0.52, 0.3, problem_name.replace('_', ' '), transform=get_ax1(row, 0).transAxes, fontweight='bold', rotation=45)
             if batch_index == 0:
                 means[problem_name] = defaultdict(lambda: 0, {})
             # loop over seg2, seg3
@@ -153,14 +159,14 @@ def create_fig_for_problems(topic : str, data : dict, n_batch: int):
                 n = int(link_name[3]) - 1
 
                 # Plot angles
-                elemAngles = ax1[row, j * 2]
+                elemAngles = get_ax1(row, j * 2)
                 elemAngles.plot(euler_angles_hat[:, n], label='ŷ')
                 elemAngles.plot(euler_angles[:, n], linestyle='-.', label='y')
                 elemAngles.legend()
                 elemAngles.set_title(f"{problem_name} {link_name}")
 
                 # Plot delta
-                elemDeltas = ax1[row, j * 2 + 1]
+                elemDeltas = get_ax1(row, j * 2 + 1)
                 ang_err = jnp.abs(euler_angles[:,n] - euler_angles_hat[:,n])
                 elemDeltas.plot(ang_err, label=f"{link_name}")
                 elemDeltas.plot([jnp.average(ang_err)] * len(ang_err), color='red', label=f"Avg {link_name}")
@@ -247,15 +253,15 @@ def plot_results(results : dict[str, dict[str, float]]):
     return f"{output_path}/results_bar.pdf"
 
 
-def merge_pdfs(files : list):
+def merge_pdfs(files : list, name = 'results_combined.pdf'):
     print(f"Trying to merge: {files}")
     from PyPDF2 import PdfMerger
     merger = PdfMerger()
     for file in files:
         merger.append(file)
-    merger.write(f"{output_path}/results_combined.pdf")
+    merger.write(f"{output_path}/{name}")
     merger.close()
-    print(f"{output_path}/results_combined.pdf")
+    print(f"{output_path}/{name}")
 
 
 def get_inferred_data(n_batch):
@@ -313,6 +319,39 @@ def get_inferred_data(n_batch):
      
     return inferred_data
 
+
+def get_inferred_data_dustin_exp():
+    X, y = get_dustin_exp_data()
+    N_BATCH_EXP_DATA = tree_utils.tree_shape(X)
+    
+    cached_infered_data_path = f"{output_path}/.cache/inferred_data_dustin.pickle"
+    inferred_data_dustin_exp = {}
+    if exists(cached_infered_data_path):
+        with open(cached_infered_data_path, 'rb') as file:
+            print("Using cached inferred data dustin exp...")
+            return pickle.load(file)
+    
+    i,j = 0,0
+    maxI, maxJ = len(PROBLEMS.keys()), N_BATCH_EXP_DATA
+    for topic in PROBLEMS.keys():
+        i += 1
+        j = 0
+        params = load_pickle_params(topic)
+        for batch_index in range(N_BATCH_EXP_DATA):
+            j += 1
+            X_i = tree_utils.tree_slice(tree_utils.tree_indices(X, jnp.array([batch_index])),1)
+            y_i = tree_utils.tree_slice(tree_utils.tree_indices(y, jnp.array([batch_index])),1)
+            yhat_i = infer(params, X_i, y_i, None, generate_mp4 = False, name = f"{topic}-dustin")
+            inferred_data_dustin_exp[f"{topic}_dustin_{batch_index}"] = (y_i, yhat_i)
+            print(f"Finished Topic {i}/{maxI}, Data-row {j}/{maxJ}")
+
+    # Cache inferred data
+    with open(cached_infered_data_path, 'wb') as file:
+        pickle.dump(inferred_data_dustin_exp, file)
+     
+    return inferred_data_dustin_exp
+
+
 def get_dustin_exp_data():
     # shape (8, 6000, 3)
     X, y = dustin_exp.dustin_exp_Xy()
@@ -320,9 +359,10 @@ def get_dustin_exp_data():
 
 def main():
     N_BATCH = 5
+    N_BATCH_EXP_DATA = 8
     means = {}
     filenames = []
-    """
+
     inferred_data = get_inferred_data(N_BATCH)
 
     i = 0
@@ -338,30 +378,23 @@ def main():
     print(means)
 
     res_file = plot_results(means)
-    """
+    
     # Plot dustin data
-    X, y = get_dustin_exp_data()
-    N_BATCH_EXP_DATA = tree_utils.tree_shape(X)
+    inferred_data_dustin_exp = get_inferred_data_dustin_exp()
     ## Un-Batch data
-    inferred_data_dustin_exp = {}
-    for topic in PROBLEMS.keys():
-        params = load_pickle_params(topic)
-        for batch_index in range(N_BATCH_EXP_DATA):
-            X_i = tree_utils.tree_slice(tree_utils.tree_indices(X, jnp.array([batch_index])),1)
-            y_i = tree_utils.tree_slice(tree_utils.tree_indices(y, jnp.array([batch_index])),1)
-            yhat_i = infer(params, X_i, y_i, None, generate_mp4 = False, name = f"{topic}-dustin")
-            inferred_data_dustin_exp[f"{topic}_dustin_{batch_index}"] = (y_i, yhat_i)
     means_dustin_exp = {}
+    dustin_filenames = []
     for topic in PROBLEMS.keys():
-        sub_res, filename = create_fig_for_problems(topic, inferred_data_dustin_exp, N_BATCH_EXP_DATA)
-        # filenames.append(filename)
+        sub_res, filename = create_fig_for_problems(topic, inferred_data_dustin_exp, N_BATCH_EXP_DATA, ['dustin'])
+        dustin_filenames.append(filename)
         print(f"Dustin exp data: {filename}")
         means_dustin_exp[topic] = sub_res
-    res_file = plot_results(means_dustin_exp)
+    res_file_dustin_exp = plot_results(means_dustin_exp)
 
 
     
     #merge_pdfs([res_file] + filenames)
+    merge_pdfs([res_file_dustin_exp] + dustin_filenames, name='results_dustin_exp_combined.pdf')
 
     
 if __name__ == "__main__":
