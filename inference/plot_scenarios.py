@@ -12,8 +12,11 @@ import tree_utils
 import x_xy
 from x_xy.subpkgs import pipeline
 from neural_networks.rnno import rnno_v2
+import neural_networks.rnno.dustin_exp.dustin_exp as dustin_exp
 
 import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from matplotlib.path import Path
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.transforms import blended_transform_factory
 
@@ -23,6 +26,7 @@ from sys import argv
 from os import environ
 from os.path import isdir, exists
 
+from collections import defaultdict
 
 # Class declarations
 @dataclass
@@ -34,6 +38,7 @@ class Problem:
 
 # Constant declarations
 USER = environ["USER"]
+COLOR_PALETTE = ['blue', 'orange', 'green', 'red', 'purple', 'brown']
 PROBLEMS = {
     "best_run" : Problem(1, jnp.array([0.02]), jnp.array([0.1])),
     "long_rigid_phase" : Problem(1, jnp.array([0.25]), jnp.array([0.1])),
@@ -113,43 +118,60 @@ data_key will be the title of the entire plot.
 """
 
 
-def create_fig_for_problems(data_key : str, data : dict):
+def create_fig_for_problems(topic : str, data : dict, n_batch: int):
     # Generate plot
     NCOLS = 4
-    NROWS = len(data)
-    fig1, ax1 = plt.subplots(NROWS, NCOLS, figsize=(16, 3.5 * NROWS))
+    NROWS = len(PROBLEMS)
+    figs = []
         
     means = {}
-    
-    for row, (problem_name, (y, yhat)) in enumerate(data.items()):
-        ax1[row, 0].text(-0.5, 0.3, problem_name.replace('_', ' '), transform=ax1[row, 0].transAxes, fontweight='bold', rotation=45)
-        means[problem_name] = {}
-        # loop over seg2, seg3
-        for j, link_name in enumerate(yhat.keys()):
-            euler_angles_hat = jnp.rad2deg(x_xy.maths.quat_to_euler(yhat[link_name]))
-            euler_angles = jnp.rad2deg(x_xy.maths.quat_to_euler(y[link_name]))
 
-            # get changing axis from 'segX' string 
-            n = int(link_name[3]) - 1
+    for batch_index in range(n_batch):
+        print(f"Plotting batch {batch_index}/{n_batch}")
+        fig1, ax1 = plt.subplots(NROWS, NCOLS, figsize=(16, 3.5 * NROWS))
+        for ax in ax1.flat:
+            ax.xaxis.set_label_coords(1.065, 0.011)
+            ax.set_xlabel("t", horizontalalignment='right')
+            #xlabel.set_position((1.065, 1.5))
+            ax.set_ylabel("ang [deg]", labelpad=-4.1)
+            ax.grid(True)
+        figs.append(fig1)
+        
+        for row, problem_name in enumerate(PROBLEMS.keys()):
+            dict_key = f"{topic}_{problem_name}_{batch_index}"
+            (y, yhat) = data[dict_key]
+            
+            ax1[row, 0].text(-0.52, 0.3, problem_name.replace('_', ' '), transform=ax1[row, 0].transAxes, fontweight='bold', rotation=45)
+            if batch_index == 0:
+                means[problem_name] = defaultdict(lambda: 0, {})
+            # loop over seg2, seg3
+            for j, link_name in enumerate(yhat.keys()):
+                euler_angles_hat = jnp.rad2deg(x_xy.maths.quat_to_euler(yhat[link_name]))
+                euler_angles = jnp.rad2deg(x_xy.maths.quat_to_euler(y[link_name]))
 
-            # Plot angles
-            elemAngles = ax1[row, j * 2]
-            elemAngles.plot(euler_angles_hat[:, n], label='ŷ')
-            elemAngles.plot(euler_angles[:, n], linestyle='-.', label='y')
-            elemAngles.legend()
-            elemAngles.set_title(f"{problem_name} {link_name}")
+                # get changing axis from 'segX' string 
+                n = int(link_name[3]) - 1
 
-            # Plot delta
-            elemDeltas = ax1[row, j * 2 + 1]
-            ang_err = jnp.abs(euler_angles[:,n] - euler_angles_hat[:,n])
-            elemDeltas.plot(ang_err, label=f"{link_name}")
-            elemDeltas.plot([jnp.average(ang_err)] * len(ang_err), color='red', label=f"Avg {link_name}")
-            # plot moving average of delta
-            elemDeltas.plot(jnp.convolve(ang_err, np.ones(100)/100, mode='valid'), color='orange', linestyle='-.', label="MovAvg")
-            elemDeltas.legend()
-            elemDeltas.set_title(f"deltas {problem_name} {link_name}")
-            # Save mean
-            means[problem_name][link_name] = float(jnp.average(ang_err))
+                # Plot angles
+                elemAngles = ax1[row, j * 2]
+                elemAngles.plot(euler_angles_hat[:, n], label='ŷ')
+                elemAngles.plot(euler_angles[:, n], linestyle='-.', label='y')
+                elemAngles.legend()
+                elemAngles.set_title(f"{problem_name} {link_name}")
+
+                # Plot delta
+                elemDeltas = ax1[row, j * 2 + 1]
+                ang_err = jnp.abs(euler_angles[:,n] - euler_angles_hat[:,n])
+                elemDeltas.plot(ang_err, label=f"{link_name}")
+                elemDeltas.plot([jnp.average(ang_err)] * len(ang_err), color='red', label=f"Avg {link_name}")
+                # plot moving average of delta
+                elemDeltas.plot(jnp.convolve(ang_err, np.ones(100)/100, mode='valid'), color='orange', linestyle='-.', label="MovAvg")
+                elemDeltas.legend()
+                elemDeltas.set_title(f"deltas {problem_name} {link_name}")
+                # Save mean
+                # TODO: Check if mean exists else set to 0
+                
+                means[problem_name][link_name] += float(jnp.average(ang_err)) / n_batch
 
 
     # Save plot
@@ -158,29 +180,35 @@ def create_fig_for_problems(data_key : str, data : dict):
 
     # BARGRAPH
     fig2, ax2 = plt.subplots(1, 1, figsize=(16, 4.5))
+    ax2.set_ylabel("mae [deg]")
     bar_width = 0.3
 
-    for i, (topic, subtopics) in enumerate(means.items()):
-        ax2.bar([p * bar_width + i for p in range(len(subtopics.values()))], subtopics.values(), width=bar_width, label=topic)
+    for i, (mean_topic, mean_subtopics) in enumerate(means.items()):
+        ax2.bar([p * bar_width + i for p in range(len(mean_subtopics.values()))], mean_subtopics.values(), width=bar_width, label=mean_topic)
 
     ax2.set_xticks([i + j * 0.3 for i in range(len(means.keys())) for j in range(2)])
     ax2.set_xticklabels([item for sublist in [list(means[p].keys()) for p in means] for item in sublist])
-    ax2.legend()
+    ax2.legend(loc='center right', bbox_to_anchor=(1.11, 0.5))
     # plt.savefig(f"{output_path}/{data_key}_bar.pdf")
     #plt.close(fig2)
     
-    filename = f"{output_path}/{data_key}.pdf"
-    fig2.suptitle(data_key)
+    print("Saving pdf...")
+    filename = f"{output_path}/{topic}.pdf"
+    fig2.suptitle(topic)
     with PdfPages(filename) as pdf:
         pdf.savefig(fig2)
-        pdf.savefig(fig1)
+        for fig in figs:
+            pdf.savefig(fig)
     
+    plt.close('all')
+    print(f"Created plot: \'{filename}\'")
     return means, filename
     
     
 def plot_results(results : dict[str, dict[str, float]]):
     fig, axs = plt.subplots(1, 1, figsize=(16, 4))
     bar_width = 1/(len(results) * 3)
+    axs.set_ylabel("mae [deg]")
 
     xticks = []
     xticklabels = []
@@ -193,18 +221,28 @@ def plot_results(results : dict[str, dict[str, float]]):
         positions_a = [j + i * bar_width * 2.5 for j in range(len(values))]
         positions_b = [j + bar_width for j in positions_a]
         positions = [x for pair in zip(positions_a, positions_b) for x in pair]
-        keys = [path[1].key for path, _ in jtu.tree_flatten_with_path(results[key])[0]]
+        tick_positions = [(positions_a[i] + positions_b[i]) / 2 for i in range(len(positions_a))]
+        
+        #keys = [path[1].key for path, _ in jtu.tree_flatten_with_path(results[key])[0]]
+        #keys = [s for s in PROBLEMS.keys()]
         print(key, positions)
-        rects = axs.bar(positions, jtu.tree_flatten(results[key])[0], bar_width, label=key)
+        for j, (position, height) in enumerate(zip(positions, list(jtu.tree_flatten(results[key])[0]))):
+            rects = axs.bar(position, height, bar_width, color=f'C{j//2}')
+            # Display exact value above the graph # axs.text(position, 1.05, f"{height:.2f}", ha='center', transform=transform, color=f'C{i//2}') 
         #print(rects.get_children()[0].get_center())
-        xticks += positions
-        xticklabels += keys
+        xticks += tick_positions
+        xticklabels += [f"{i}"] * len(tick_positions)
         axs.text(i + 0.25, -0.1, key, ha='center', transform=transform)
 
     axs.set_xticks(xticks)   
     axs.set_xticklabels(xticklabels)
-    axs.tick_params(labelsize=7, direction="out")
-    axs.legend()
+    axs.tick_params(labelsize=9, direction="out")
+    # Create custom Legend
+    legend_elements = []
+    for i, topic in enumerate(PROBLEMS.keys()):
+        legend_elements.append(mpatches.Patch(label=f"{i}: {topic}", color='none'))
+    axs.legend(handles=legend_elements, loc='center right', bbox_to_anchor=(1.13, 0.5), borderpad=0.2, handlelength=0, handletextpad=0, markerscale=0, prop={'size': 10})
+    # Save and return
     plt.savefig(f"{output_path}/results_bar.pdf")
     return f"{output_path}/results_bar.pdf"
 
@@ -275,25 +313,55 @@ def get_inferred_data(n_batch):
      
     return inferred_data
 
+def get_dustin_exp_data():
+    # shape (8, 6000, 3)
+    X, y = dustin_exp.dustin_exp_Xy()
+    return X, y
+
 def main():
     N_BATCH = 5
-    results = {}
+    means = {}
     filenames = []
-
+    """
     inferred_data = get_inferred_data(N_BATCH)
 
-    # Plot
-    for topic, _ in PROBLEMS.keys():
+    i = 0
+    # Plot randomly generated data
+    for topic in PROBLEMS.keys():
+        i += 1
+        print(f"Plotting {topic} ({i}/{len(PROBLEMS)})")
+        sub_res, filename = create_fig_for_problems(topic, inferred_data, N_BATCH)
+        filenames.append(filename)
+        means[topic] = sub_res
         
-        pass
-        ##sub_res, filename = create_fig_for_problems(topic, problems_dict)
-    ##filenames.append(filename)
     
-    ##results[topic] = sub_res
-    ##print(results)
+    print(means)
 
-    ##res_file = plot_results(results)
-    ##merge_pdfs([res_file] + filenames)
+    res_file = plot_results(means)
+    """
+    # Plot dustin data
+    X, y = get_dustin_exp_data()
+    N_BATCH_EXP_DATA = tree_utils.tree_shape(X)
+    ## Un-Batch data
+    inferred_data_dustin_exp = {}
+    for topic in PROBLEMS.keys():
+        params = load_pickle_params(topic)
+        for batch_index in range(N_BATCH_EXP_DATA):
+            X_i = tree_utils.tree_slice(tree_utils.tree_indices(X, jnp.array([batch_index])),1)
+            y_i = tree_utils.tree_slice(tree_utils.tree_indices(y, jnp.array([batch_index])),1)
+            yhat_i = infer(params, X_i, y_i, None, generate_mp4 = False, name = f"{topic}-dustin")
+            inferred_data_dustin_exp[f"{topic}_dustin_{batch_index}"] = (y_i, yhat_i)
+    means_dustin_exp = {}
+    for topic in PROBLEMS.keys():
+        sub_res, filename = create_fig_for_problems(topic, inferred_data_dustin_exp, N_BATCH_EXP_DATA)
+        # filenames.append(filename)
+        print(f"Dustin exp data: {filename}")
+        means_dustin_exp[topic] = sub_res
+    res_file = plot_results(means_dustin_exp)
+
+
+    
+    #merge_pdfs([res_file] + filenames)
 
     
 if __name__ == "__main__":
