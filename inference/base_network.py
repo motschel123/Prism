@@ -40,7 +40,7 @@ dustin_exp_xml_seg1 = r"""
         <body name="seg1" joint="free">
             <body name="seg2" joint="ry">
                 <geom type="box" mass="10" pos="0.5 0 0" dim="1 0.25 0.2"/> 
-                <body name="seg3" joint="rx"></body>
+                <body name="seg3" joint="rz"></body>
                     <geom type="box" mass="10" pos="1.5 0 0" dim="1 0.25 0.2"/>
             </body>
         </body>
