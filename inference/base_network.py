@@ -1,3 +1,4 @@
+from neural_networks.rnno.training_loop_callbacks import dustin_exp_Xy
 import x_xy
 import jax
 import jax.numpy as jnp
@@ -37,11 +38,10 @@ dustin_exp_xml_seg1 = r"""
     <options gravity="0 0 9.81" dt="0.01"/>
     <worldbody>
         <body name="seg1" joint="free">
-            <geom type="box" mass="10" pos="1 0 0" dim="1 0.25 0.2"/>
             <body name="seg2" joint="ry">
-                <geom type="box" mass="10" pos="1 0 0" dim="1 0.25 0.2"/>
-                <body name="seg3" joint="rz"></body>
-                    <geom type="box" mass="10" pos="1 0 0" dim="1 0.25 0.2"/>
+                <geom type="box" mass="10" pos="0.5 0 0" dim="1 0.25 0.2"/> 
+                <body name="seg3" joint="rx"></body>
+                    <geom type="box" mass="10" pos="1.5 0 0" dim="1 0.25 0.2"/>
             </body>
         </body>
     </worldbody>
@@ -54,6 +54,8 @@ Calculates an amplifying-function, which can be used to decrease the values of a
 An array of shape (time / sampling rate) will be returned, containing values between 0 and 1.
 The covariance values are relative to the length of the array that will be created.
 """
+
+
 def motion_amplifier(
         time,
         sampling_rate,
@@ -62,7 +64,8 @@ def motion_amplifier(
         rigid_duration_cov=jnp.array([0.02] * 3),
         transition_cov=jnp.array([0.1] * 3)
 ) -> jnp.ndarray:
-    assert rigid_duration_cov.shape == (n_rigid_phases,) == transition_cov.shape, "motion_amplifier: There must be a variance for each rigid phase!"
+    assert rigid_duration_cov.shape == (
+        n_rigid_phases,) == transition_cov.shape, "motion_amplifier: There must be a variance for each rigid phase!"
     n_frames = int(time / sampling_rate)
     key_rigid_means, key_rigid_variances, key_slope_down_variances, key_slope_up_variances = random.split(
         key_rigid_phases, 4)
@@ -172,13 +175,12 @@ def random_angles_with_rigid_phases_over_time(
 # Declatarion of Extended Config dataclass used for storing additional parameters
 @dataclass
 class ExtendedConfig(x_xy.algorithms.RCMG_Config):
-    n_rigid_phases : int = 3
-    cov_rigid_durations : jax.Array = jnp.array([0.02] * n_rigid_phases)
-    cov_transitions : jax.Array = jnp.array([0.1] * n_rigid_phases)
-    
+    n_rigid_phases: int = 3
+    cov_rigid_durations: jax.Array = jnp.array([0.02] * n_rigid_phases)
+    cov_transitions: jax.Array = jnp.array([0.1] * n_rigid_phases)
+
     def __post_init__(self):
         assert self.cov_rigid_durations.shape == self.cov_transitions.shape
-
 
 
 def define_joints():
@@ -201,7 +203,8 @@ def define_joints():
             dang_max=config.dang_max,
             t_min=config.t_min,
             t_max=config.t_max,
-            randomized_interpolation=config.randomized_interpolation_angle, # ???????????????????????
+            # ???????????????????????
+            randomized_interpolation=config.randomized_interpolation_angle,
             range_of_motion=config.range_of_motion_hinge,
             range_of_motion_method=config.range_of_motion_hinge_method
         )
@@ -229,7 +232,7 @@ def create_sys():
     try:
         define_joints()
     except AssertionError:
-        pass  # Joints already seem to be defined 
+        pass  # Joints already seem to be defined
     return x_xy.io.load_sys_from_str(three_seg_rigid)
 
 
@@ -261,13 +264,15 @@ def finalize_fn(key, q, x, sys):
     y = finalize_fn_rel_pose_data(key, q, x, sys)
     return X, y, x
 
+
 """import tree_utils
     tree_utils.tree_indices()
 """
-from neural_networks.rnno.training_loop_callbacks import dustin_exp_Xy
 
-def generate_data(sys, config : ExtendedConfig, batch_size = 1):
-    generator = x_xy.algorithms.build_generator(sys, config, finalize_fn=finalize_fn)
+
+def generate_data(sys, config: ExtendedConfig, batch_size=1):
+    generator = x_xy.algorithms.build_generator(
+        sys, config, finalize_fn=finalize_fn)
     # we can even batch together multiple generators
     generator = x_xy.algorithms.batch_generator([generator], batch_size)
     seed = jax.random.PRNGKey(1,)
