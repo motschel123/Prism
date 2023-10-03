@@ -1,17 +1,23 @@
-<x_xy model="three_segments">
+<x_xy model="three_seg_rigid">
     <options gravity="0 0 9.81" dt="0.01"/>
-    <defaults>
-        <geom vispy_edge_color="black" vispy_color="white"/>
-    </defaults>
     <worldbody>
-        <body name="upper" pos="0 0 0" quat="1 0 0 0" joint="ry" damping="2">
-            <geom type="box" mass="10" pos="0.5 0 0" dim="1 0.25 0.2"/>
-            <body name="middle" pos="1 0 0" quat="1 0 0 0" joint="ry" damping="2">
-                <geom type="box" mass="10" pos="0.5 0 0" dim="1 0.25 0.2"/>
-                <body name="lower" pos="1 0 0" quat="1 0 0 0" joint="ry" damping="2">
-                    <geom type="box" mass="10" pos="0.5 0 0" dim="1 0.25 0.2"/>
+        <body name="seg2" joint="free">
+            <geom type="box" mass="10" pos="0.1 0 0" dim="0.2 0.05 0.05" color="red"/>
+            <body name="seg1" joint="ry" pos="0 0 0">
+                <geom type="box" mass="10" pos="-0.1 0 0" dim="-0.2 0.05 0.05" color="yellow"/>
+                <body name="imu1" pos="-0.1 0.0 0.03" joint="frozen">
+                    <geom type="box" mass="2" pos="0 0 0" dim="0.05 0.01 0.01" color="lightgreen"/>
+                </body>
+            </body>
+            <body name="seg3" joint="rz" pos="0.2 0 0">
+                <geom type="box" mass="10" pos="0.1 0 0" dim="0.2 0.05 0.05" color="blue"/>
+                <body name="imu2" joint="frozen" pos="0.1 0.0 0.03">
+                    <geom type="box" mass="2" pos="0 0 0" dim="0.05 0.01 0.01" color="lightgreen"/>
                 </body>
             </body>
         </body>
     </worldbody>
+    <defaults>
+        <geom edge_color="black" color="1 0.8 0.7 1"/>
+    </defaults>
 </x_xy>
