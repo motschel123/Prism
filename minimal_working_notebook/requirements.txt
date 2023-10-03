@@ -155,7 +155,7 @@ wcwidth==0.2.6
 webcolors==1.13
 websocket-client==1.6.1
 wheel==0.40.0
-x-xy==0.6.8 @ git+https://github.com/SimiPixel/x_xy_v2.git@8b6ef534a6a7108644e4cd2dfa3485c69d4c4ad2
+x-xy @ git+https://github.com/SimiPixel/x_xy_v2.git@8b6ef534a6a7108644e4cd2dfa3485c69d4c4ad2
 yarg==0.1.9
 yarl==1.9.2
 zipp==3.15.0
